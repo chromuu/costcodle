@@ -21,8 +21,8 @@ const costcodleStartDate = new Date("09/21/2023");
 const gameNumber = getGameNumber();
 
 //Elements with event listeners to play the game
-const input = document.getElementById("guess-input");
-const buttonInput = document.getElementById("guess-button");
+let input = document.getElementById("guess-input");
+let buttonInput = document.getElementById("guess-button");
 
 const infoButton = document.getElementById("info-button");
 infoButton.addEventListener("click", switchState);
@@ -118,6 +118,9 @@ function convertToShareButton() {
 function displayProductCard() {
   //First, update the image container with the new product image
   const imageContainer = document.getElementById("image-container");
+
+  // Clear previous image(s)
+  imageContainer.innerHTML = "";
 
   //Create a new image element to dynamically store game image
   const productImageElement = document.createElement("img");
@@ -512,3 +515,76 @@ function getGameNumber() {
 
   return Math.ceil(dayDifference);
 }
+
+// Add event listener for the new product button
+document.getElementById("new-product-button").addEventListener("click", function() {
+  // Get the current game number
+  const currentGameNumber = gameState.gameNumber !== -1 ? gameState.gameNumber : getGameNumber();
+  // Total number of products (from games.json, last is 3399)
+  const maxGameNumber = 3399;
+  let newGameNumber;
+  do {
+    newGameNumber = Math.floor(Math.random() * maxGameNumber) + 1;
+  } while (newGameNumber === currentGameNumber);
+
+  // Update game state and user stats for new game
+  gameState.gameNumber = newGameNumber;
+  gameState.guesses = [];
+  gameState.hasWon = false;
+  userStats.numGames++;
+  localStorage.setItem("state", JSON.stringify(gameState));
+  localStorage.setItem("stats", JSON.stringify(userStats));
+
+  // Reset guess fields in the UI
+  for (let i = 1; i <= 6; i++) {
+    const guessContainer = document.getElementById(i.toString());
+    if (guessContainer) {
+      guessContainer.innerHTML = "";
+      guessContainer.className = "guess-container";
+    }
+  }
+
+  // Restore the input box if it was replaced by the share button
+  const inputContainer = document.getElementById("input-container");
+  if (!document.getElementById("guess-input")) {
+    inputContainer.innerHTML = `
+      <div id="text-input-container">
+        <div id="input-label">$</div>
+        <input
+          id="guess-input"
+          type="text"
+          pattern="^\\$\\d{1,3}(,\\d{3})*(\\.\\d+)?$"
+          data-type="currency"
+          placeholder="Enter a guess..."
+        />
+      </div>
+      <div id="button-container">
+        <button id="guess-button" class="active">SUBMIT</button>
+      </div>
+    `;
+    // Re-attach event listeners
+    const newInput = document.getElementById("guess-input");
+    const newButton = document.getElementById("guess-button");
+    newInput.addEventListener("keydown", inputEventListener);
+    newButton.addEventListener("click", buttonEventListener);
+    newInput.addEventListener("focus", () => {
+      newInput.setAttribute("placeholder", "0.00");
+    });
+    newInput.addEventListener("blur", () => {
+      newInput.setAttribute("placeholder", "Enter a guess...");
+    });
+    // Update global references
+    input = newInput;
+    buttonInput = newButton;
+  }
+
+  // Reset input field
+  input.value = "";
+  input.removeAttribute("disabled");
+  input.setAttribute("placeholder", "Enter a guess...");
+  buttonInput.removeAttribute("disabled");
+  buttonInput.classList.add("active");
+
+  // Fetch and display the new product
+  fetchGameData(newGameNumber);
+});
