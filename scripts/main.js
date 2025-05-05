@@ -12,6 +12,9 @@ let shakeTimeout;
 let toastTimeout;
 let warningTimeout;
 
+// Global variable for exchange rate
+let usdToCadRate = 1.0; // Default to 1.0 in case fetch fails
+
 /*
   Global variable constants
 */
@@ -52,8 +55,23 @@ const gameState = JSON.parse(localStorage.getItem("state")) || {
 
 playGame();
 
-function playGame() {
-  fetchGameData(getGameNumber());
+async function playGame() {
+  // Fetch exchange rate first
+  try {
+    const response = await fetch('https://api.frankfurter.app/latest?from=USD&to=CAD');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    usdToCadRate = data.rates.CAD;
+    console.log(`Fetched USD to CAD rate: ${usdToCadRate}`);
+  } catch (error) {
+    console.error("Could not fetch exchange rate. Using default 1.0.", error);
+    // Optionally display a message to the user that conversion failed
+  } finally {
+    // Now fetch game data
+    fetchGameData(getGameNumber());
+  }
 }
 
 /*
@@ -66,11 +84,18 @@ function fetchGameData(gameNumber) {
     .then((response) => response.json())
     .then((json) => {
       productName = json[`game-${gameNumber}`].name;
-      productPrice = json[`game-${gameNumber}`].price;
-      productPrice = Number(productPrice.slice(1, productPrice.length));
+      // Get USD price and remove '$'
+      let productPriceUsd = json[`game-${gameNumber}`].price;
+      productPriceUsd = Number(productPriceUsd.slice(1, productPriceUsd.length));
+      // Convert to CAD
+      productPrice = (productPriceUsd * usdToCadRate).toFixed(2);
       productImage = json[`game-${gameNumber}`].image;
 
       initializeGame();
+    })
+    .catch(error => {
+      console.error("Error fetching game data:", error);
+      // Handle error fetching game data (e.g., show an error message)
     });
 }
 
@@ -145,13 +170,15 @@ function updateGuessStat() {
   const guessStats = document.getElementById("game-stats");
   if (gameState.hasWon) {
     guessStats.innerHTML = `<center>You win! Congratulations!🎉</center>`;
-    guessStats.innerHTML += `<center>The price was $${productPrice}</center>`;
+    // Display price in CAD
+    guessStats.innerHTML += `<center>The price was $${productPrice} CAD</center>`;
     return;
   }
 
   if (gameState.guesses.length === 6) {
     guessStats.innerHTML = `<center>Better luck next time!</center>`;
-    guessStats.innerHTML += `<center>The price was $${productPrice}</center>`;
+    // Display price in CAD
+    guessStats.innerHTML += `<center>The price was $${productPrice} CAD</center>`;
   } else {
     guessStats.innerHTML = `Guess: ${gameState.guesses.length + 1}/6`;
   }
@@ -360,7 +387,8 @@ function displayGuess(guess, index = gameState.guesses.length) {
 
   infoContainer.classList.add("guess-direction-container", "animate__flipInX");
 
-  guessValueContainer.innerHTML = `$${guess.guess}`;
+  // Display guess value with CAD suffix (or keep as $ if preferred)
+  guessValueContainer.innerHTML = `$${guess.guess}`; // Assuming user inputs in CAD
 
   infoContainer.classList.add(guess.closeness);
   infoContainer.innerHTML = guess.direction;
@@ -549,13 +577,13 @@ document.getElementById("new-product-button").addEventListener("click", function
   if (!document.getElementById("guess-input")) {
     inputContainer.innerHTML = `
       <div id="text-input-container">
-        <div id="input-label">$</div>
+        <div id="input-label">CAD</div>
         <input
           id="guess-input"
           type="text"
-          pattern="^\\$\\d{1,3}(,\\d{3})*(\\.\\d+)?$"
+          pattern="^\$\d{1,3}(,\d{3})*(\.\d+)?$"
           data-type="currency"
-          placeholder="Enter a guess..."
+          placeholder="Enter CAD guess..."
         />
       </div>
       <div id="button-container">
@@ -571,7 +599,7 @@ document.getElementById("new-product-button").addEventListener("click", function
       newInput.setAttribute("placeholder", "0.00");
     });
     newInput.addEventListener("blur", () => {
-      newInput.setAttribute("placeholder", "Enter a guess...");
+      newInput.setAttribute("placeholder", "Enter CAD guess...");
     });
     // Update global references
     input = newInput;
@@ -581,9 +609,15 @@ document.getElementById("new-product-button").addEventListener("click", function
   // Reset input field
   input.value = "";
   input.removeAttribute("disabled");
-  input.setAttribute("placeholder", "Enter a guess...");
+  input.setAttribute("placeholder", "Enter CAD guess...");
   buttonInput.removeAttribute("disabled");
   buttonInput.classList.add("active");
+
+  // Change label for existing input
+  const inputLabel = document.getElementById("input-label");
+  if (inputLabel) {
+    inputLabel.textContent = "CAD";
+  }
 
   // Fetch and display the new product
   fetchGameData(newGameNumber);
